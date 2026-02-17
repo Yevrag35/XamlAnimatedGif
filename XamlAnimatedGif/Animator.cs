@@ -13,11 +13,14 @@ using XamlAnimatedGif.Decoding;
 using XamlAnimatedGif.Decompression;
 using XamlAnimatedGif.Extensions;
 using System.Diagnostics;
+using XamlAnimatedGif.Buffers;
 
 namespace XamlAnimatedGif
 {
     public abstract class Animator : DependencyObject, IAsyncDisposable, IDisposable
     {
+        private const int MAX_STACKALLOC = 512;
+
         private readonly Stream _sourceStream;
         private readonly Uri _sourceUri;
         private readonly bool _isSourceStreamOwner;
@@ -155,17 +158,17 @@ namespace XamlAnimatedGif
                 if (_timingManager.IsComplete)
                 {
                     _timingManager.Reset();
-                    _isStarted = false;
+                    Interlocked.Exchange(ref _isStarted, false);
                 }
 
-                if (!_isStarted)
+                if (!Interlocked.Exchange(ref _isStarted, true))
                 {
                     _runCancellationSource?.Dispose();
                     _runCancellationSource = new CancellationTokenSource();
-                    _isStarted = true;
                     OnAnimationStarted();
                     if (_timingManager.IsPaused)
                         _timingManager.Resume();
+
                     await RunAsync(_runCancellationSource.Token);
                 }
                 else if (_timingManager.IsPaused)
@@ -179,7 +182,7 @@ namespace XamlAnimatedGif
             catch (Exception ex)
             {
                 // ignore errors that might occur during Dispose
-                if (!_disposing)
+                if (!Volatile.Read(ref _disposed))
                     OnError(ex, AnimationErrorKind.Rendering);
             }
         }
@@ -326,7 +329,7 @@ namespace XamlAnimatedGif
                     transparencyIndex = gce.TransparencyIndex;
                 }
 
-                palettes[i] = new GifPalette(transparencyIndex, colorTable);
+                palettes[i] = new GifPalette(transparencyIndex, colorTable ?? []);
             }
 
             return palettes;
@@ -337,7 +340,7 @@ namespace XamlAnimatedGif
             // Find the size of the largest frame pixel data
             // (ignoring the fact that we include the next frame's header)
 
-            long lastSize = stream.Length - metadata.Frames.Last().ImageData.CompressedDataStartOffset;
+            long lastSize = stream.Length - metadata.Frames[^1].ImageData.CompressedDataStartOffset;
             long maxSize = lastSize;
             if (metadata.Frames.Count > 1)
             {
@@ -367,7 +370,7 @@ namespace XamlAnimatedGif
                 indexStream = await GetIndexStreamAsync(frame, cancellationToken);
             }
 
-            using (indexStream)
+            await using (indexStream)
             using (_bitmap.LockInScope())
             {
                 if (frameIndex < _previousFrameIndex)
@@ -376,51 +379,107 @@ namespace XamlAnimatedGif
                     DisposePreviousFrame(frame);
 
                 int bufferLength = 4 * rect.Width;
-                byte[] indexBuffer;
-                byte[] lineBuffer = new byte[bufferLength];
+                byte[]? indexBuffer = null;
+                int indexBufferLength = desc.Width * desc.Height;
+                bool indexBufferRented = false;
 
-                var palette = _palettes[frameIndex];
-                int transparencyIndex = palette.TransparencyIndex ?? -1;
-
-                int[] rows = desc.Interlace
-                    ? InterlacedRows(rect.Height).ToArray()
-                    : NormalRows(rect.Height).ToArray();
-
-                if (!_cacheFrameDataInMemory)
+                byte[] lineBuffer = Rent.Array<byte>(bufferLength);
+                try
                 {
-                    indexBuffer = new byte[desc.Width * desc.Height];
-                    await indexStream.ReadAllAsync(indexBuffer, 0, indexBuffer.Length, cancellationToken);
-                }
-                else
-                {
-                    indexBuffer = _cachedFrameBytes[frameIndex];
-                }
 
-                for (int y = 0; y < rect.Height; y++)
-                {
-                    int offset = (desc.Top + rows[y]) * _stride + desc.Left * 4;
+                    var palette = _palettes[frameIndex];
+                    int transparencyIndex = palette.TransparencyIndex ?? -1;
 
-                    if (transparencyIndex >= 0)
+                    //int[] rows = desc.Interlace
+                    //    ? InterlacedRows(rect.Height).ToArray()
+                    //    : NormalRows(rect.Height).ToArray();
+
+                    if (!_cacheFrameDataInMemory)
                     {
-                        CopyFromBitmap(_bitmap, offset, lineBuffer);
+                        indexBuffer = Rent.Array<byte>(indexBufferLength);
+                        indexBufferRented = true;
+                        await indexStream.ReadAllAsync(indexBuffer, 0, indexBufferLength, cancellationToken);
+                    }
+                    else
+                    {
+                        indexBuffer = _cachedFrameBytes[frameIndex];
                     }
 
-                    for (int x = 0; x < rect.Width; x++)
+                    using (var rowBuffer = RentedBuffer.Rent<int>(
+                        desc.Height <= MAX_STACKALLOC
+                            ? stackalloc int[desc.Height]
+                            : desc.Height))
                     {
-                        byte index = indexBuffer[x + y * desc.Width];
-                        int i = 4 * x;
-                        if (index != transparencyIndex)
+                        Span<int> rows = rowBuffer[..rect.Height];
+                        if (desc.Interlace)
+                            fillInterlacedRows(rows);
+                        else
+                            fillNormalRows(rows);
+
+                        for (int y = 0; y < rect.Height; y++)
                         {
-                            WriteColor(lineBuffer, palette[index], i);
+                            int offset = (desc.Top + rows[y]) * _stride + desc.Left * 4;
+
+                            if (transparencyIndex >= 0)
+                            {
+                                CopyFromBitmap(_bitmap, offset, lineBuffer.AsSpan(0, bufferLength));
+                            }
+
+                            for (int x = 0; x < rect.Width; x++)
+                            {
+                                byte index = indexBuffer[x + y * desc.Width];
+                                int i = 4 * x;
+                                if (index != transparencyIndex)
+                                {
+                                    WriteColor(lineBuffer, palette[index], i);
+                                }
+                            }
+                            CopyToBitmap(lineBuffer.AsSpan(0, bufferLength), _bitmap, offset);
                         }
+                        _bitmap.AddDirtyRect(rect);
                     }
-                    CopyToBitmap(lineBuffer, _bitmap, offset);
                 }
-                _bitmap.AddDirtyRect(rect);
+                finally
+                {
+                    Rent.Return(lineBuffer);
+                    if (indexBufferRented)
+                        Rent.Return(indexBuffer);
+                }
             }
 
             _previousFrame = frame;
             _previousFrameIndex = frameIndex;
+
+            static void fillNormalRows(Span<int> rows)
+            {
+                for (int y = 0; y < rows.Length; y++)
+                    rows[y] = y;
+            }
+
+            static void fillInterlacedRows(Span<int> rows)
+            {
+                int height = rows.Length;
+                int write = 0;
+
+                // GIF interlace, 4 passes:
+                // Pass 1: 0, 8, 16, ...
+                for (int y = 0; y < height; y += 8)
+                    rows[write++] = y;
+
+                // Pass 2: 4, 12, 20, ...
+                for (int y = 4; y < height; y += 8)
+                    rows[write++] = y;
+
+                // Pass 3: 2, 6, 10, ...
+                for (int y = 2; y < height; y += 4)
+                    rows[write++] = y;
+
+                // Pass 4: 1, 3, 5, ...
+                for (int y = 1; y < height; y += 2)
+                    rows[write++] = y;
+
+                Debug.Assert(write == height);
+            }
         }
 
         private static IEnumerable<int> NormalRows(int height)
@@ -455,10 +514,10 @@ namespace XamlAnimatedGif
             }
         }
 
-        private static void CopyToBitmap(byte[] buffer, WriteableBitmap bitmap, int offset, int length)
-        {
-            Marshal.Copy(buffer, 0, bitmap.BackBuffer + offset, length);
-        }
+        //private static void CopyToBitmap(byte[] buffer, WriteableBitmap bitmap, int offset, int length)
+        //{
+        //    Marshal.Copy(buffer, 0, bitmap.BackBuffer + offset, length);
+        //}
         private static unsafe void CopyToBitmap(ReadOnlySpan<byte> source, WriteableBitmap bitmap, int offset)
         {
             byte* dstPtr = (byte*)bitmap.BackBuffer + offset;
@@ -475,7 +534,7 @@ namespace XamlAnimatedGif
             new Span<byte>(srcPtr, destination.Length).CopyTo(destination);
         }
 
-        private static void WriteColor(byte[] lineBuffer, Color color, int startIndex)
+        private static void WriteColor(Span<byte> lineBuffer, Color color, int startIndex)
         {
             lineBuffer[startIndex] = color.B;
             lineBuffer[startIndex + 1] = color.G;
@@ -528,25 +587,34 @@ namespace XamlAnimatedGif
         private void ClearArea(Int32Rect rect)
         {
             int bufferLength = 4 * rect.Width;
-            Span<byte> lineBuffer = stackalloc byte[bufferLength];
-            for (int y = 0; y < rect.Height; y++)
-            {
-                int offset = (rect.Y + y) * _stride + 4 * rect.X;
-                CopyToBitmap(lineBuffer, _bitmap, offset);
-            }
 
-            _bitmap.AddDirtyRect(new Int32Rect(rect.X, rect.Y, rect.Width, rect.Height));
+            using (var buffer = RentedBuffer.Rent<byte>(
+                bufferLength <= MAX_STACKALLOC
+                    ? stackalloc byte[bufferLength]
+                    : bufferLength))
+            {
+                for (int y = 0; y < rect.Height; y++)
+                {
+                    int offset = (rect.Y + y) * _stride + 4 * rect.X;
+                    CopyToBitmap(buffer[..bufferLength], _bitmap, offset);
+                }
+
+                _bitmap.AddDirtyRect(new Int32Rect(rect.X, rect.Y, rect.Width, rect.Height));
+            }
         }
 
         private async Task<Stream> GetIndexStreamAsync(GifFrame frame, CancellationToken cancellationToken)
         {
             var data = frame.ImageData;
-            cancellationToken.ThrowIfCancellationRequested();
+            if (cancellationToken.IsCancellationRequested)
+                return Stream.Null;
+
             _sourceStream.Seek(data.CompressedDataStartOffset, SeekOrigin.Begin);
             using (var ms = new MemoryStream(_indexStreamBuffer))
             {
                 await GifHelpers.CopyDataBlocksToStreamAsync(_sourceStream, ms, cancellationToken).ConfigureAwait(false);
             }
+
             var lzwStream = new LzwDecompressStream(_indexStreamBuffer, data.LzwMinimumCodeSize);
             return lzwStream;
         }
@@ -615,7 +683,6 @@ namespace XamlAnimatedGif
             GC.SuppressFinalize(this);
         }
 
-        private bool _disposing;
         private bool _disposed;
         protected virtual void Dispose(bool disposing)
         {
