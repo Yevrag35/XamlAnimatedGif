@@ -1,6 +1,8 @@
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace XamlAnimatedGif.Decoding
@@ -17,22 +19,29 @@ namespace XamlAnimatedGif.Decoding
         {
         }
 
-        internal static async Task<GifDataStream> ReadAsync(Stream stream)
+        internal static async Task<GifDataStream> ReadAsync(Stream stream, CancellationToken token  )
         {
             var file = new GifDataStream();
-            await file.ReadInternalAsync(stream).ConfigureAwait(false);
+            await file.ReadInternalAsync(stream, token).ConfigureAwait(false);
             return file;
         }
 
-        private async Task ReadInternalAsync(Stream stream)
+        private async Task ReadInternalAsync(Stream stream, CancellationToken token)
         {
-            Header = await GifHeader.ReadAsync(stream).ConfigureAwait(false);
+            MemoryStream debugStream = new();
+            await stream.CopyToAsync(debugStream, 8192, token).ConfigureAwait(false);
+            debugStream.Seek(0, SeekOrigin.Begin);
+
+
+            stream = debugStream;
+
+            Header = await GifHeader.ReadAsync(stream, token).ConfigureAwait(false);
 
             if (Header.LogicalScreenDescriptor.HasGlobalColorTable)
             {
-                GlobalColorTable = await GifHelpers.ReadColorTableAsync(stream, Header.LogicalScreenDescriptor.GlobalColorTableSize).ConfigureAwait(false);
+                GlobalColorTable = await GifHelpers.ReadColorTableAsync(stream, Header.LogicalScreenDescriptor.GlobalColorTableSize, token).ConfigureAwait(false);
             }
-            await ReadFramesAsync(stream).ConfigureAwait(false);
+            await ReadFramesAsync(stream, token).ConfigureAwait(false);
 
             var netscapeExtension =
                             Extensions
@@ -44,7 +53,7 @@ namespace XamlAnimatedGif.Decoding
                 : (ushort)1;
         }
 
-        private async Task ReadFramesAsync(Stream stream)
+        private async Task ReadFramesAsync(Stream stream, CancellationToken token)
         {
             List<GifFrame> frames = new List<GifFrame>();
             List<GifExtension> controlExtensions = new List<GifExtension>();
@@ -53,7 +62,7 @@ namespace XamlAnimatedGif.Decoding
             {
                 try
                 {
-                    var block = await GifBlock.ReadAsync(stream, controlExtensions).ConfigureAwait(false);
+                    var block = await GifBlock.ReadAsync(stream, controlExtensions, token).ConfigureAwait(false);
 
                     if (block.Kind == GifBlockKind.GraphicRendering)
                         controlExtensions = new List<GifExtension>();

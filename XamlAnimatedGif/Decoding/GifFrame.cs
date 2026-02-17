@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace XamlAnimatedGif.Decoding
@@ -24,7 +25,7 @@ namespace XamlAnimatedGif.Decoding
             get { return GifBlockKind.GraphicRendering; }
         }
 
-        internal new static async Task<GifFrame> ReadAsync(Stream stream, IEnumerable<GifExtension> controlExtensions)
+        internal new static async Task<GifFrame> ReadAsync(Stream stream, IEnumerable<GifExtension> controlExtensions, CancellationToken token)
         {
             var frame = new GifFrame();
 

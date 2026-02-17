@@ -1,5 +1,8 @@
+using System;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
+using XamlAnimatedGif.IO;
 
 namespace XamlAnimatedGif.Decoding
 {
@@ -18,20 +21,25 @@ namespace XamlAnimatedGif.Decoding
             get { return GifBlockKind.SpecialPurpose; }
         }
 
-        internal static async Task<GifCommentExtension> ReadAsync(Stream stream)
+        internal static async Task<GifCommentExtension> ReadAsync(Stream stream, CancellationToken token)
         {
             var comment = new GifCommentExtension();
-            await comment.ReadInternalAsync(stream).ConfigureAwait(false);
+            await comment.ReadInternalAsync(stream, token).ConfigureAwait(false);
             return comment;
         }
 
-        private async Task ReadInternalAsync(Stream stream)
+        private async Task ReadInternalAsync(Stream stream, CancellationToken token)
         {
             // Note: at this point, the label (0xFE) has already been read
+            ArrayPoolMemoryStream ms = new();
+            await using (ms.ConfigureAwait(false))
+            {
+                ReadOnlyMemory<byte> data = await GifHelpers.ReadDataBlocksAsync(stream, ms, token)
+                                                            .ConfigureAwait(false);
 
-            var bytes = await GifHelpers.ReadDataBlocksAsync(stream).ConfigureAwait(false);
-            if (bytes != null)
-                Text = GifHelpers.GetString(bytes);
+                if (!data.IsEmpty)
+                    Text = GifHelpers.GetString(data.Span);
+            }
         }
     }
 }

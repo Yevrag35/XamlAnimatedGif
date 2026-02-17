@@ -1,3 +1,4 @@
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace XamlAnimatedGif.Decoding
@@ -15,9 +16,11 @@ namespace XamlAnimatedGif.Decoding
             get { return GifBlockKind.Other; }
         }
 
-        internal static Task<GifTrailer> ReadAsync()
+        internal static Task<GifTrailer> ReadAsync(CancellationToken token)
         {
-            return Task.FromResult(new GifTrailer());
+            return !token.IsCancellationRequested
+                ? Task.FromResult(new GifTrailer())
+                : Task.FromCanceled<GifTrailer>(token);
         }
     }
 }

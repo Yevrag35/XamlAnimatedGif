@@ -1,0 +1,7 @@
+﻿[*.cs]
+
+# IDE0009: Member access should be qualified.
+dotnet_diagnostic.IDE0009.severity = none
+
+# IDE2003: Blank line required between block and subsequent statement
+dotnet_diagnostic.IDE2003.severity = none

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -37,15 +38,19 @@ namespace XamlAnimatedGif.Extensions
 
         public static async Task<int> ReadByteAsync(this Stream stream, CancellationToken cancellationToken = default)
         {
-            var buffer = new byte[1];
-#if LACKS_STREAM_MEMORY_OVERLOADS
-            int n = await stream.ReadAsync(buffer, 0, 1, cancellationToken);
-#else
-            int n = await stream.ReadAsync(buffer.AsMemory(0, 1), cancellationToken);
-#endif
-            if (n == 0)
-                return -1;
-            return buffer[0];
+            //byte[] buffer = new byte[1];
+            byte[] buffer = ArrayPool<byte>.Shared.Rent(1);
+            try
+            {
+                int n = await stream.ReadAsync(buffer.AsMemory(0, 1), cancellationToken);
+                if (n == 0)
+                    return -1;
+                return buffer[0];
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
+            }
         }
 
         public static Stream AsBuffered(this Stream stream)

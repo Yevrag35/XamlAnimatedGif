@@ -122,8 +122,8 @@ namespace XamlAnimatedGif
         private static string GetCacheFileName(Uri uri)
         {
             using var sha1 = SHA1.Create();
-            var bytes = Encoding.UTF8.GetBytes(uri.AbsoluteUri);
-            var hash = sha1.ComputeHash(bytes);
+            byte[] bytes = Encoding.UTF8.GetBytes(uri.AbsoluteUri);
+            byte[] hash = sha1.ComputeHash(bytes);
             return ToHex(hash);
         }
 

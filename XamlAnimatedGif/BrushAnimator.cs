@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
@@ -32,29 +33,31 @@ namespace XamlAnimatedGif
             }
         }
 
-        public static Task<BrushAnimator> CreateAsync(Uri sourceUri, RepeatBehavior repeatBehavior, IProgress<int> progress = null)
+        public static Task<BrushAnimator> CreateAsync(Uri sourceUri, RepeatBehavior repeatBehavior, IProgress<int> progress = null, CancellationToken cancellationToken = default)
         {
-            return CreateAsync(sourceUri, repeatBehavior, false, progress);
+            return CreateAsync(sourceUri, repeatBehavior, false, progress, cancellationToken);
         }
 
-        public static Task<BrushAnimator> CreateAsync(Uri sourceUri, RepeatBehavior repeatBehavior, bool cacheFrameDataInMemory, IProgress<int> progress = null)
+        public static Task<BrushAnimator> CreateAsync(Uri sourceUri, RepeatBehavior repeatBehavior, bool cacheFrameDataInMemory, IProgress<int> progress = null, CancellationToken cancellationToken = default)
         {
             return CreateAsyncCore(
                 sourceUri,
                 progress,
-                (stream, metadata) => new BrushAnimator(stream, sourceUri, metadata, repeatBehavior, cacheFrameDataInMemory));
+                (stream, metadata) => new BrushAnimator(stream, sourceUri, metadata, repeatBehavior, cacheFrameDataInMemory),
+                cancellationToken);
         }
 
-        public static Task<BrushAnimator> CreateAsync(Stream sourceStream, RepeatBehavior repeatBehavior)
+        public static Task<BrushAnimator> CreateAsync(Stream sourceStream, RepeatBehavior repeatBehavior, CancellationToken cancellationToken = default)
         {
-            return CreateAsync(sourceStream, repeatBehavior, false);
+            return CreateAsync(sourceStream, repeatBehavior, false, cancellationToken);
         }
 
-        public static Task<BrushAnimator> CreateAsync(Stream sourceStream, RepeatBehavior repeatBehavior, bool cacheFrameDataInMemory)
+        public static Task<BrushAnimator> CreateAsync(Stream sourceStream, RepeatBehavior repeatBehavior, bool cacheFrameDataInMemory, CancellationToken cancellationToken = default)
         {
             return CreateAsyncCore(
                 sourceStream,
-                metadata => new BrushAnimator(sourceStream, null, metadata, repeatBehavior, cacheFrameDataInMemory));
+                metadata => new BrushAnimator(sourceStream, null, metadata, repeatBehavior, cacheFrameDataInMemory),
+                cancellationToken);
         }
     }
 }

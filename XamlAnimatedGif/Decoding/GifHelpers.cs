@@ -1,19 +1,28 @@
 using System;
+using System.Buffers;
 using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using XamlAnimatedGif.Extensions;
+using XamlAnimatedGif.IO;
 
 namespace XamlAnimatedGif.Decoding
 {
     internal static class GifHelpers
     {
-        public static async Task<string> ReadStringAsync(Stream stream, int length)
+        public static async Task<string> ReadStringAsync(Stream stream, int length, CancellationToken cancellationToken = default)
         {
-            byte[] bytes = new byte[length];
-            await stream.ReadAllAsync(bytes, 0, length).ConfigureAwait(false);
-            return GetString(bytes);
+            byte[] bytes = ArrayPool<byte>.Shared.Rent(length);
+            try
+            {
+                await stream.ReadAllAsync(bytes, 0, length, cancellationToken).ConfigureAwait(false);
+                return GetString(bytes.AsSpan(0, length));
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(bytes);
+            }
         }
 
         public static async Task ConsumeDataBlocksAsync(Stream sourceStream, CancellationToken cancellationToken = default)
@@ -23,47 +32,72 @@ namespace XamlAnimatedGif.Decoding
 
         public static async Task<byte[]> ReadDataBlocksAsync(Stream stream, CancellationToken cancellationToken = default)
         {
-            using var ms = new MemoryStream();
-            await CopyDataBlocksToStreamAsync(stream, ms, cancellationToken);
-            return ms.ToArray();
+            ArrayPoolMemoryStream ms = new();
+            await using (ms.ConfigureAwait(false))
+            {
+                await CopyDataBlocksToStreamAsync(stream, ms, cancellationToken);
+                return ms.ToArray();
+            }
+        }
+        public static async Task<ReadOnlyMemory<byte>> ReadDataBlocksAsync(Stream stream, ArrayPoolMemoryStream destination, CancellationToken cancellationToken = default)
+        {
+            await CopyDataBlocksToStreamAsync(stream, destination, cancellationToken);
+            destination.Rewind();
+            return destination.AsMemory();
         }
 
         public static async Task CopyDataBlocksToStreamAsync(Stream sourceStream, Stream targetStream, CancellationToken cancellationToken = default)
         {
             int len;
             // the length is on 1 byte, so each data sub-block can't be more than 255 bytes long
-            byte[] buffer = new byte[255];
-            while ((len = await sourceStream.ReadByteAsync(cancellationToken)) > 0)
+            byte[] buffer = ArrayPool<byte>.Shared.Rent(255);
+            try
             {
-                await sourceStream.ReadAllAsync(buffer, 0, len, cancellationToken).ConfigureAwait(false);
+                while ((len = await sourceStream.ReadByteAsync(cancellationToken)) > 0)
+                {
+                    await sourceStream.ReadAllAsync(buffer, 0, len, cancellationToken).ConfigureAwait(false);
 #if LACKS_STREAM_MEMORY_OVERLOADS
                 await targetStream.WriteAsync(buffer, 0, len, cancellationToken);
 #else
-                await targetStream.WriteAsync(buffer.AsMemory(0, len), cancellationToken);
+                    await targetStream.WriteAsync(buffer.AsMemory(0, len), cancellationToken);
 #endif
+                }
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
             }
         }
 
-        public static async Task<GifColor[]> ReadColorTableAsync(Stream stream, int size)
+        public static async Task<GifColor[]> ReadColorTableAsync(Stream stream, int size, CancellationToken cancellationToken = default)
         {
             int length = 3 * size;
-            byte[] bytes = new byte[length];
-            await stream.ReadAllAsync(bytes, 0, length).ConfigureAwait(false);
-            GifColor[] colorTable = new GifColor[size];
-            for (int i = 0; i < size; i++)
+            //byte[] bytes = new byte[length];
+            byte[] bytes = ArrayPool<byte>.Shared.Rent(length);
+            try
             {
-                byte r = bytes[3 * i];
-                byte g = bytes[3 * i + 1];
-                byte b = bytes[3 * i + 2];
-                colorTable[i] = new GifColor(r, g, b);
+                await stream.ReadAllAsync(bytes, 0, length, cancellationToken).ConfigureAwait(false);
+                GifColor[] colorTable = new GifColor[size];
+                for (int i = 0; i < size; i++)
+                {
+                    byte r = bytes[3 * i];
+                    byte g = bytes[3 * i + 1];
+                    byte b = bytes[3 * i + 2];
+                    colorTable[i] = new GifColor(r, g, b);
+                }
+
+                return colorTable;
             }
-            return colorTable;
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(bytes);
+            }
         }
 
         public static bool IsNetscapeExtension(GifApplicationExtension ext)
         {
-            return ext.ApplicationIdentifier == "NETSCAPE"
-                && GetString(ext.AuthenticationCode) == "2.0";
+            return "NETSCAPE".Equals(ext.ApplicationIdentifier, StringComparison.Ordinal)
+                && ext.AuthenticationCode.SequenceEqual("2.0"u8);
         }
 
         public static ushort GetRepeatCount(GifApplicationExtension ext)
@@ -101,14 +135,19 @@ namespace XamlAnimatedGif.Decoding
             return new UnsupportedGifVersionException("Unsupported version: " + version);
         }
 
+        [Obsolete("Use GetString(ReadOnlySpan<byte>) instead.")]
         public static string GetString(byte[] bytes)
         {
             return GetString(bytes, 0, bytes.Length);
         }
-
+        [Obsolete("Use GetString(ReadOnlySpan<byte>) instead.")]
         public static string GetString(byte[] bytes, int index, int count)
         {
             return Encoding.UTF8.GetString(bytes, index, count);
+        }
+        public static string GetString(ReadOnlySpan<byte> bytes)
+        {
+            return Encoding.UTF8.GetString(bytes);
         }
     }
 }

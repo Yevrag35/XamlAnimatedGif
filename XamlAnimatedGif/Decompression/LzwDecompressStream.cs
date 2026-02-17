@@ -180,7 +180,7 @@ namespace XamlAnimatedGif.Decompression
 
             public Sequence Append(byte b)
             {
-                var bytes = new byte[Bytes.Length + 1];
+                byte[] bytes = new byte[Bytes.Length + 1];
                 Bytes.CopyTo(bytes, 0);
                 bytes[Bytes.Length] = b;
                 return new Sequence(bytes);

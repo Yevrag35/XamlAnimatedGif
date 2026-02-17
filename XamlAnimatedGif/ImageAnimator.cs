@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Controls;
 using System.Windows.Media.Animation;
@@ -26,28 +27,30 @@ namespace XamlAnimatedGif
 
         protected override object AnimationSource => _image;
 
-        public static Task<ImageAnimator> CreateAsync(Uri sourceUri, RepeatBehavior repeatBehavior, IProgress<int> progress, Image image)
+        public static Task<ImageAnimator> CreateAsync(Uri sourceUri, RepeatBehavior repeatBehavior, IProgress<int> progress, Image image, CancellationToken cancellationToken = default)
         {
-            return CreateAsync(sourceUri, repeatBehavior, progress, image, false);
+            return CreateAsync(sourceUri, repeatBehavior, progress, image, false, cancellationToken);
         }
 
-        public static Task<ImageAnimator> CreateAsync(Uri sourceUri, RepeatBehavior repeatBehavior, IProgress<int> progress, Image image, bool cacheFrameDataInMemory)
+        public static Task<ImageAnimator> CreateAsync(Uri sourceUri, RepeatBehavior repeatBehavior, IProgress<int> progress, Image image, bool cacheFrameDataInMemory, CancellationToken cancellationToken = default)
         {
             return CreateAsyncCore(
                 sourceUri,
                 progress,
-                (stream, metadata) => new ImageAnimator(stream, sourceUri, metadata, repeatBehavior, image, cacheFrameDataInMemory));
+                (stream, metadata) => new ImageAnimator(stream, sourceUri, metadata, repeatBehavior, image, cacheFrameDataInMemory),
+                cancellationToken);
         }
 
-        public static Task<ImageAnimator> CreateAsync(Stream sourceStream, RepeatBehavior repeatBehavior, Image image)
+        public static Task<ImageAnimator> CreateAsync(Stream sourceStream, RepeatBehavior repeatBehavior, Image image, CancellationToken cancellationToken = default)
         {
-            return CreateAsync(sourceStream, repeatBehavior, image);
+            return CreateAsync(sourceStream, repeatBehavior, image, false, cancellationToken);
         }
-        public static Task<ImageAnimator> CreateAsync(Stream sourceStream, RepeatBehavior repeatBehavior, Image image, bool cacheFrameDataInMemory)
+        public static Task<ImageAnimator> CreateAsync(Stream sourceStream, RepeatBehavior repeatBehavior, Image image, bool cacheFrameDataInMemory, CancellationToken cancellationToken = default)
         {
             return CreateAsyncCore(
                 sourceStream,
-                metadata => new ImageAnimator(sourceStream, null, metadata, repeatBehavior, image, cacheFrameDataInMemory));
+                metadata => new ImageAnimator(sourceStream, null, metadata, repeatBehavior, image, cacheFrameDataInMemory),
+                cancellationToken);
         }
     }
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -45,25 +46,33 @@ namespace XamlAnimatedGif.Decoding
         {
             // Note: at this point, the label (0x01) has already been read
 
-            byte[] bytes = new byte[13];
-            await stream.ReadAllAsync(bytes, 0, bytes.Length).ConfigureAwait(false);
+            //byte[] bytes = new byte[13];
+            byte[] bytes = ArrayPool<byte>.Shared.Rent(13);
+            try
+            {
+                await stream.ReadAllAsync(bytes, 0, bytes.Length).ConfigureAwait(false);
 
-            BlockSize = bytes[0];
-            if (BlockSize != 12)
-                throw GifHelpers.InvalidBlockSizeException("Plain Text Extension", 12, BlockSize);
+                BlockSize = bytes[0];
+                if (BlockSize != 12)
+                    throw GifHelpers.InvalidBlockSizeException("Plain Text Extension", 12, BlockSize);
 
-            Left = BitConverter.ToUInt16(bytes, 1);
-            Top = BitConverter.ToUInt16(bytes, 3);
-            Width = BitConverter.ToUInt16(bytes, 5);
-            Height = BitConverter.ToUInt16(bytes, 7);
-            CellWidth = bytes[9];
-            CellHeight = bytes[10];
-            ForegroundColorIndex = bytes[11];
-            BackgroundColorIndex = bytes[12];
+                Left = BitConverter.ToUInt16(bytes, 1);
+                Top = BitConverter.ToUInt16(bytes, 3);
+                Width = BitConverter.ToUInt16(bytes, 5);
+                Height = BitConverter.ToUInt16(bytes, 7);
+                CellWidth = bytes[9];
+                CellHeight = bytes[10];
+                ForegroundColorIndex = bytes[11];
+                BackgroundColorIndex = bytes[12];
 
-            var dataBytes = await GifHelpers.ReadDataBlocksAsync(stream).ConfigureAwait(false);
-            Text = GifHelpers.GetString(dataBytes);
-            Extensions = controlExtensions.ToList().AsReadOnly();
+                byte[] dataBytes = await GifHelpers.ReadDataBlocksAsync(stream).ConfigureAwait(false);
+                Text = GifHelpers.GetString(dataBytes.AsSpan());
+                Extensions = controlExtensions.ToList().AsReadOnly();
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(bytes);
+            }
         }
     }
 }

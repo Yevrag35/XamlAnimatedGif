@@ -1,5 +1,7 @@
 using System;
+using System.Buffers;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using XamlAnimatedGif.Extensions;
 
@@ -24,28 +26,42 @@ namespace XamlAnimatedGif.Decoding
             get { return GifBlockKind.SpecialPurpose; }
         }
 
-        internal static async Task<GifApplicationExtension> ReadAsync(Stream stream)
+        internal static async Task<GifApplicationExtension> ReadAsync(Stream stream, CancellationToken cancellationToken = default)
         {
             var ext = new GifApplicationExtension();
-            await ext.ReadInternalAsync(stream).ConfigureAwait(false);
+            await ext.ReadInternalAsync(stream, cancellationToken)
+                     .ConfigureAwait(false);
+
             return ext;
         }
 
-        private async Task ReadInternalAsync(Stream stream)
+        private async Task ReadInternalAsync(Stream stream, CancellationToken token)
         {
             // Note: at this point, the label (0xFF) has already been read
 
-            byte[] bytes = new byte[12];
-            await stream.ReadAllAsync(bytes, 0, bytes.Length).ConfigureAwait(false);
-            BlockSize = bytes[0]; // should always be 11
-            if (BlockSize != 11)
-                throw GifHelpers.InvalidBlockSizeException("Application Extension", 11, BlockSize);
+            //byte[] bytes = new byte[12];
+            const int byteLength = 12;
+            byte[] bytes = ArrayPool<byte>.Shared.Rent(byteLength);
+            try
+            {
+                await stream.ReadAllAsync(bytes, 0, byteLength, token)
+                            .ConfigureAwait(false);
 
-            ApplicationIdentifier = GifHelpers.GetString(bytes, 1, 8);
-            byte[] authCode = new byte[3];
-            Array.Copy(bytes, 9, authCode, 0, 3);
-            AuthenticationCode = authCode;
-            Data = await GifHelpers.ReadDataBlocksAsync(stream).ConfigureAwait(false);
+                BlockSize = bytes[0]; // should always be 11
+                if (BlockSize != 11)
+                    throw GifHelpers.InvalidBlockSizeException("Application Extension", 11, BlockSize);
+
+                ApplicationIdentifier = GifHelpers.GetString(bytes.AsSpan(1, 8));
+                byte[] authCode = new byte[3];
+                Array.Copy(bytes, 9, authCode, 0, 3);
+                AuthenticationCode = authCode;
+                Data = await GifHelpers.ReadDataBlocksAsync(stream, token)
+                                       .ConfigureAwait(false);
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(bytes);
+            }
         }
     }
 }

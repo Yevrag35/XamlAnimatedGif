@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -38,7 +39,7 @@ namespace XamlAnimatedGif.Demo
             btnTestLzw.IsEnabled = false;
             try
             {
-                await DecompressAllFramesAsync(fileName);
+                await DecompressAllFramesAsync(fileName, CancellationToken.None);
             }
             finally
             {
@@ -62,10 +63,10 @@ namespace XamlAnimatedGif.Demo
             AnimationBehavior.SetSourceStream(img, null);
         }
 
-        private static async Task DecompressAllFramesAsync(string path)
+        private static async Task DecompressAllFramesAsync(string path, CancellationToken token)
         {
             using var fileStream = File.OpenRead(path);
-            var gif = await GifDataStream.ReadAsync(fileStream);
+            var gif = await GifDataStream.ReadAsync(fileStream, token);
             for (int i = 0; i < gif.Frames.Count; i++)
             {
                 var frame = gif.Frames[i];
@@ -103,9 +104,9 @@ namespace XamlAnimatedGif.Demo
             if (string.IsNullOrEmpty(fileName))
                 return;
             using var fileStream = File.OpenRead(fileName);
-            var gif = await GifDataStream.ReadAsync(fileStream);
-            var json = JsonConvert.SerializeObject(gif, Formatting.Indented);
-            var jsonFileName = fileName + ".json";
+            var gif = await GifDataStream.ReadAsync(fileStream, CancellationToken.None);
+            string json = JsonConvert.SerializeObject(gif, Formatting.Indented);
+            string jsonFileName = fileName + ".json";
             File.WriteAllText(jsonFileName, json);
         }
     }

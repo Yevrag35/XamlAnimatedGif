@@ -61,21 +61,21 @@ namespace XamlAnimatedGif
 
         private async Task LoadFrames(CancellationToken cancellationToken)
         {
-            var biggestFrameSize = 0L;
-            for (var frameIndex = 0; frameIndex < _metadata.Frames.Count; frameIndex++)
+            long biggestFrameSize = 0L;
+            for (int frameIndex = 0; frameIndex < _metadata.Frames.Count; frameIndex++)
             {
-                var startPosition = _metadata.Frames[frameIndex].ImageData.CompressedDataStartOffset;
-                var endPosition = _metadata.Frames.Count == frameIndex + 1
+                long startPosition = _metadata.Frames[frameIndex].ImageData.CompressedDataStartOffset;
+                long endPosition = _metadata.Frames.Count == frameIndex + 1
                     ? _sourceStream.Length
                     : _metadata.Frames[frameIndex + 1].ImageData.CompressedDataStartOffset - 1;
-                var size = endPosition - startPosition;
+                long size = endPosition - startPosition;
                 biggestFrameSize = Math.Max(size, biggestFrameSize);
             }
 
             try
             {
                 byte[] indexCompressedBytes = new byte[biggestFrameSize];
-                for (var frameIndex = 0; frameIndex < _metadata.Frames.Count; frameIndex++)
+                for (int frameIndex = 0; frameIndex < _metadata.Frames.Count; frameIndex++)
                 {
                     var frame = _metadata.Frames[frameIndex];
                     var frameDesc = _metadata.Frames[frameIndex].Descriptor;
@@ -108,14 +108,15 @@ namespace XamlAnimatedGif
         internal static async Task<TAnimator> CreateAsyncCore<TAnimator>(
             Uri sourceUri,
             IProgress<int> progress,
-            Func<Stream, GifDataStream, TAnimator> create)
+            Func<Stream, GifDataStream, TAnimator> create,
+            CancellationToken token)
             where TAnimator : Animator
         {
             var stream = await UriLoader.GetStreamFromUriAsync(sourceUri, progress);
             try
             {
                 // ReSharper disable once AccessToDisposedClosure
-                return await CreateAsyncCore(stream, metadata => create(stream, metadata));
+                return await CreateAsyncCore(stream, metadata => create(stream, metadata), token);
             }
             catch
             {
@@ -126,13 +127,14 @@ namespace XamlAnimatedGif
 
         internal static async Task<TAnimator> CreateAsyncCore<TAnimator>(
             Stream sourceStream,
-            Func<GifDataStream, TAnimator> create)
+            Func<GifDataStream, TAnimator> create,
+            CancellationToken token)
             where TAnimator : Animator
         {
             if (!sourceStream.CanSeek)
                 throw new ArgumentException("The stream is not seekable");
             sourceStream.Seek(0, SeekOrigin.Begin);
-            var metadata = await GifDataStream.ReadAsync(sourceStream);
+            var metadata = await GifDataStream.ReadAsync(sourceStream, token);
             return create(metadata);
         }
 
@@ -378,7 +380,7 @@ namespace XamlAnimatedGif
                 var palette = _palettes[frameIndex];
                 int transparencyIndex = palette.TransparencyIndex ?? -1;
 
-                var rows = desc.Interlace
+                int[] rows = desc.Interlace
                     ? InterlacedRows(rect.Height).ToArray()
                     : NormalRows(rect.Height).ToArray();
 
@@ -538,7 +540,7 @@ namespace XamlAnimatedGif
 
         private async Task GetIndexBytesAsync(int frameIndex, byte[] buffer, CancellationToken cancellationToken)
         {
-            var startPosition = _metadata.Frames[frameIndex].ImageData.CompressedDataStartOffset;
+            long startPosition = _metadata.Frames[frameIndex].ImageData.CompressedDataStartOffset;
 
             // Note: Seek doesn't accept a CancellationToken, so we check the CT manually before calling it, but there's
             // still a race condition, because the stream could have been disposed right after we check the CT.
