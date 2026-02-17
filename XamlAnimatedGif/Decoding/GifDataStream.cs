@@ -28,12 +28,12 @@ namespace XamlAnimatedGif.Decoding
 
         private async Task ReadInternalAsync(Stream stream, CancellationToken token)
         {
-            MemoryStream debugStream = new();
-            await stream.CopyToAsync(debugStream, 8192, token).ConfigureAwait(false);
-            debugStream.Seek(0, SeekOrigin.Begin);
+            //MemoryStream debugStream = new();
+            //await stream.CopyToAsync(debugStream, 8192, token).ConfigureAwait(false);
+            //debugStream.Seek(0, SeekOrigin.Begin);
 
 
-            stream = debugStream;
+            //stream = debugStream;
 
             Header = await GifHeader.ReadAsync(stream, token).ConfigureAwait(false);
 

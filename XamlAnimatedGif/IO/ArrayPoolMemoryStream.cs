@@ -24,12 +24,12 @@ public sealed class ArrayPoolMemoryStream : Stream
     /// </summary>
     /// <param name="initialCapacity">Initial capacity in bytes; rounded up to at least 1.</param>
     /// <param name="pool">Pool to rent from; defaults to <see cref="ArrayPool{T}.Shared"/>.</param>
-    public ArrayPoolMemoryStream(int initialCapacity = DEFAULT_INITIAL_CAPACITY, ArrayPool<byte> pool = null)
+    public ArrayPoolMemoryStream(int initialCapacity = DEFAULT_INITIAL_CAPACITY, ArrayPool<byte>? pool = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(initialCapacity);
 
         _pool = pool ?? ArrayPool<byte>.Shared;
-        _buffer = _pool.Rent(Math.Max(1, initialCapacity));
+        _buffer = _pool.Rent(Math.Max(16, initialCapacity));
         _length = 0;
         _position = 0;
     }

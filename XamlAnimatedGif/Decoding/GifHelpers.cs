@@ -27,7 +27,8 @@ namespace XamlAnimatedGif.Decoding
 
         public static async Task ConsumeDataBlocksAsync(Stream sourceStream, CancellationToken cancellationToken = default)
         {
-            await CopyDataBlocksToStreamAsync(sourceStream, Stream.Null, cancellationToken);
+            await CopyDataBlocksToStreamAsync(sourceStream, Stream.Null, cancellationToken)
+                 .ConfigureAwait(false);
         }
 
         public static async Task<byte[]> ReadDataBlocksAsync(Stream stream, CancellationToken cancellationToken = default)
@@ -35,13 +36,14 @@ namespace XamlAnimatedGif.Decoding
             ArrayPoolMemoryStream ms = new();
             await using (ms.ConfigureAwait(false))
             {
-                await CopyDataBlocksToStreamAsync(stream, ms, cancellationToken);
+                await CopyDataBlocksToStreamAsync(stream, ms, cancellationToken).ConfigureAwait(false);
                 return ms.ToArray();
             }
         }
         public static async Task<ReadOnlyMemory<byte>> ReadDataBlocksAsync(Stream stream, ArrayPoolMemoryStream destination, CancellationToken cancellationToken = default)
         {
-            await CopyDataBlocksToStreamAsync(stream, destination, cancellationToken);
+            await CopyDataBlocksToStreamAsync(stream, destination, cancellationToken)
+                 .ConfigureAwait(false);
             destination.Rewind();
             return destination.AsMemory();
         }
@@ -53,13 +55,14 @@ namespace XamlAnimatedGif.Decoding
             byte[] buffer = ArrayPool<byte>.Shared.Rent(255);
             try
             {
-                while ((len = await sourceStream.ReadByteAsync(cancellationToken)) > 0)
+                while ((len = await sourceStream.ReadByteAsync(cancellationToken).ConfigureAwait(false)) > 0)
                 {
                     await sourceStream.ReadAllAsync(buffer, 0, len, cancellationToken).ConfigureAwait(false);
 #if LACKS_STREAM_MEMORY_OVERLOADS
                 await targetStream.WriteAsync(buffer, 0, len, cancellationToken);
 #else
-                    await targetStream.WriteAsync(buffer.AsMemory(0, len), cancellationToken);
+                    await targetStream.WriteAsync(buffer.AsMemory(0, len), cancellationToken)
+                                      .ConfigureAwait(false);
 #endif
                 }
             }
@@ -72,7 +75,6 @@ namespace XamlAnimatedGif.Decoding
         public static async Task<GifColor[]> ReadColorTableAsync(Stream stream, int size, CancellationToken cancellationToken = default)
         {
             int length = 3 * size;
-            //byte[] bytes = new byte[length];
             byte[] bytes = ArrayPool<byte>.Shared.Rent(length);
             try
             {

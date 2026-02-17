@@ -13,19 +13,16 @@ namespace XamlAnimatedGif.Decoding
         internal const int ExtensionLabel = 0xFF;
 
         public int BlockSize { get; private set; }
-        public string ApplicationIdentifier { get; private set; }
-        public byte[] AuthenticationCode { get; private set; }
-        public byte[] Data { get; private set; }
+        public string ApplicationIdentifier { get => field ??= ""; private set => field = value ?? ""; }
+        public byte[] AuthenticationCode { get => field ??= []; private set => field = value ?? []; }
+        public byte[] Data { get => field ??= []; private set => field = value ?? []; }
+        internal override GifBlockKind Kind => GifBlockKind.SpecialPurpose;
 
         private GifApplicationExtension()
         {
         }
 
-        internal override GifBlockKind Kind
-        {
-            get { return GifBlockKind.SpecialPurpose; }
-        }
-
+        
         internal static async Task<GifApplicationExtension> ReadAsync(Stream stream, CancellationToken cancellationToken = default)
         {
             var ext = new GifApplicationExtension();
@@ -39,7 +36,6 @@ namespace XamlAnimatedGif.Decoding
         {
             // Note: at this point, the label (0xFF) has already been read
 
-            //byte[] bytes = new byte[12];
             const int byteLength = 12;
             byte[] bytes = ArrayPool<byte>.Shared.Rent(byteLength);
             try
