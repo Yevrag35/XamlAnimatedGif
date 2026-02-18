@@ -194,6 +194,65 @@ namespace XamlAnimatedGif
 
         #endregion
 
+        #region AnimatorTask
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public static Task<Animator> GetAnimatorTask(DependencyObject obj)
+        {
+            return EnsureAnimatorTask(obj, replaceCompleted: false).Task;
+        }
+
+        private static void SetAnimatorTask(DependencyObject obj, Task<Animator?> value)
+        {
+            obj.SetValue(AnimatorTaskProperty, value);
+        }
+
+        public static readonly DependencyProperty AnimatorTaskProperty =
+            DependencyProperty.RegisterAttached(
+                "AnimatorTask",
+                typeof(Task<Animator?>),
+                typeof(AnimationBehavior),
+                new PropertyMetadata(null));
+
+        private static TaskCompletionSource<Animator> EnsureAnimatorTask(DependencyObject obj, bool replaceCompleted)
+        {
+            var tcs = GetAnimatorTaskCompletionSource(obj);
+            if (tcs == null || (replaceCompleted && tcs.Task.IsCompleted))
+            {
+                TaskCreationOptions options =
+#if NETCOREAPP
+                    TaskCreationOptions.RunContinuationsAsynchronously;
+#else
+                    TaskCreationOptions.LongRunning;
+#endif
+                tcs = new TaskCompletionSource<Animator>(options);
+                SetAnimatorTaskCompletionSource(obj, tcs);
+                SetAnimatorTask(obj, tcs.Task);
+            }
+
+            return tcs;
+        }
+
+        private static TaskCompletionSource<Animator> GetAnimatorTaskCompletionSource(DependencyObject obj)
+        {
+            return (TaskCompletionSource<Animator>)obj.GetValue(AnimatorTaskCompletionSourceProperty);
+        }
+
+        private static void SetAnimatorTaskCompletionSource(DependencyObject obj, TaskCompletionSource<Animator> value)
+        {
+            obj.SetValue(AnimatorTaskCompletionSourceProperty, value);
+        }
+
+        private static readonly DependencyProperty AnimatorTaskCompletionSourceProperty =
+            DependencyProperty.RegisterAttached(
+                "AnimatorTaskCompletionSource",
+                typeof(TaskCompletionSource<Animator?>),
+                typeof(AnimationBehavior),
+                new PropertyMetadata(null));
+
+
+        #endregion
+
         #region Error
 
         public static readonly RoutedEvent ErrorEvent =
@@ -414,6 +473,7 @@ namespace XamlAnimatedGif
 
             image.Source = null;
             ClearAnimatorCore(image);
+            EnsureAnimatorTask(image, replaceCompleted: true);
 
             try
             {
@@ -429,9 +489,12 @@ namespace XamlAnimatedGif
                 {
                     InitAnimationAsync(image, uri, GetRepeatBehavior(image), seqNum, GetCacheFramesInMemory(image));
                 }
+
+                ResolveAnimatorTask(image, animator: null, faulted: false);
             }
             catch (Exception ex)
             {
+                ResolveAnimatorTask(image, animator: null, faulted: true, exception: ex);
                 OnError(image, ex, AnimationErrorKind.Loading);
             }
         }
@@ -454,6 +517,7 @@ namespace XamlAnimatedGif
 
             image.Source = null;
             ClearAnimatorCore(image);
+            ResolveAnimatorTask(image, animator: null, faulted: false);
         }
 
         private static bool IsLoaded(FrameworkElement element)
@@ -484,7 +548,10 @@ namespace XamlAnimatedGif
         private static async void InitAnimationAsync(Image image, Uri sourceUri, RepeatBehavior repeatBehavior, int seqNum, bool cacheFrameDataInMemory)
         {
             if (!CheckDesignMode(image, sourceUri, null))
+            {
+                ResolveAnimatorTask(image, animator: null, faulted: false);
                 return;
+            }
 
             try
             {
@@ -494,20 +561,24 @@ namespace XamlAnimatedGif
                 if (GetSeqNum(image) != seqNum)
                 {
                     animator.Dispose();
+                    ResolveAnimatorTask(image, animator: null, faulted: false);
                     return;
                 }
 
                 SetAnimatorCore(image, animator);
+                ResolveAnimatorTask(image, animator, faulted: false);
                 OnLoaded(image);
                 await StartAsync(image, animator);
             }
             catch (InvalidSignatureException)
             {
                 await SetStaticImageAsync(image, sourceUri);
+                ResolveAnimatorTask(image, animator: null, faulted: false);
                 OnLoaded(image);
             }
             catch(Exception ex)
             {
+                ResolveAnimatorTask(image, animator: null, faulted: true, exception: ex);
                 OnError(image, ex, AnimationErrorKind.Loading);
             }
         }
@@ -515,7 +586,10 @@ namespace XamlAnimatedGif
         private static async void InitAnimationAsync(Image image, Stream stream, RepeatBehavior repeatBehavior, int seqNum, bool cacheFrameDataInMemory)
         {
             if (!CheckDesignMode(image, null, stream))
+            {
+                ResolveAnimatorTask(image, animator: null, faulted: false);
                 return;
+            }
 
             try
             {
@@ -528,18 +602,33 @@ namespace XamlAnimatedGif
                 }
 
                 SetAnimatorCore(image, animator);
+                ResolveAnimatorTask(image, animator, faulted: false);
                 OnLoaded(image);
                 await StartAsync(image, animator);
             }
             catch (InvalidSignatureException)
             {
                 SetStaticImage(image, stream);
+                ResolveAnimatorTask(image, animator: null, faulted: false);
                 OnLoaded(image);
             }
             catch(Exception ex)
             {
+                ResolveAnimatorTask(image, animator: null, faulted: true, exception: ex);
                 OnError(image, ex, AnimationErrorKind.Loading);
             }
+        }
+
+        private static void ResolveAnimatorTask(Image image, Animator animator, bool faulted, Exception exception = null)
+        {
+            var tcs = EnsureAnimatorTask(image, replaceCompleted: false);
+
+            if (faulted)
+                tcs.TrySetException(exception ?? new InvalidOperationException("Animator initialization failed."));
+            else
+                tcs.TrySetResult(animator);
+
+            SetAnimatorTaskCompletionSource(image, null);
         }
 
         private static void SetAnimatorCore(Image image, Animator animator)

@@ -31,6 +31,9 @@ namespace XamlAnimatedGif
         private readonly byte[][] _cachedFrameBytes;
         private readonly Task _loadFramesDataTask;
         private readonly CancellationTokenSource _loadFramesCancellationSource;
+
+        internal Task Initialization { get; }
+
         #region Constructor and factory methods
 
         internal Animator(Stream sourceStream, Uri sourceUri, GifDataStream metadata, RepeatBehavior repeatBehavior,
@@ -56,6 +59,17 @@ namespace XamlAnimatedGif
                 _cachedFrameBytes = new byte[_metadata.Frames.Count][];
                 var cancellationToken = _loadFramesCancellationSource.Token;
                 _loadFramesDataTask = Task.Run(() => LoadFrames(cancellationToken), cancellationToken);
+                Initialization = _loadFramesDataTask;
+            }
+            else
+            {
+                Task completed =
+#if NET45
+                    Task.FromResult(0);
+#else
+                    Task.CompletedTask;
+#endif
+                Initialization = completed;
             }
         }
 
@@ -136,7 +150,7 @@ namespace XamlAnimatedGif
             return create(metadata);
         }
 
-        #endregion
+#endregion
 
         #region Animation
 
