@@ -245,6 +245,18 @@ namespace XamlAnimatedGif
                 typeof(AnimationBehavior),
                 new PropertyMetadata(null));
 
+        private static void ResolveAnimatorTask(Image image, Animator? animator, bool faulted, Exception? exception = null)
+        {
+            var tcs = EnsureAnimatorTask(image, replaceCompleted: false);
+
+            if (faulted)
+                tcs.TrySetException(exception ?? new InvalidOperationException("Animator initialization failed."));
+            else
+                tcs.TrySetResult(animator);
+
+            SetAnimatorTaskCompletionSource(image, null);
+        }
+
         #endregion
 
         #region Error
@@ -468,7 +480,6 @@ namespace XamlAnimatedGif
             image.Source = null;
             ClearAnimatorCore(image);
             EnsureAnimatorTask(image, replaceCompleted: true);
-            //ResetAnimatorTask(image);
 
             try
             {
@@ -616,17 +627,7 @@ namespace XamlAnimatedGif
             }
         }
 
-        private static void ResolveAnimatorTask(Image image, Animator? animator, bool faulted, Exception? exception = null)
-        {
-            var tcs = EnsureAnimatorTask(image, replaceCompleted: false);
-
-            if (faulted)
-                tcs.TrySetException(exception ?? new InvalidOperationException("Animator initialization failed."));
-            else
-                tcs.TrySetResult(animator);
-
-            SetAnimatorTaskCompletionSource(image, null);
-        }
+        
         private static void SetAnimatorCore(Image image, Animator animator)
         {
             SetAnimator(image, animator);
