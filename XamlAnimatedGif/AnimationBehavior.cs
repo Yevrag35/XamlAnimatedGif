@@ -254,8 +254,6 @@ namespace XamlAnimatedGif
                 tcs.TrySetException(exception ?? new InvalidOperationException("Animator initialization failed."));
             else
                 tcs.TrySetResult(animator);
-
-            SetAnimatorTaskCompletionSource(image, tcs);
         }
 
         #endregion
