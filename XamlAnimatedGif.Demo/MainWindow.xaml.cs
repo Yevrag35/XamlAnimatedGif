@@ -46,7 +46,10 @@ namespace XamlAnimatedGif.Demo
         private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
             var animator = await AnimationBehavior.GetAnimatorTask(img);
-            Console.WriteLine(animator is not null);
+            if (animator is not null)
+            {
+                animator.Pause();
+            }
         }
 
 
@@ -249,7 +252,7 @@ namespace XamlAnimatedGif.Demo
             get => _repeatBehavior;
             set
             {
-                Interlocked.Exchange(ref _repeatBehavior, value);
+                _repeatBehavior = value;
                 OnPropertyChanged();
                 Completed = false;
             }
