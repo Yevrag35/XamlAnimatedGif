@@ -627,8 +627,6 @@ namespace XamlAnimatedGif
                 tcs.TrySetException(exception ?? new InvalidOperationException("Animator initialization failed."));
             else
                 tcs.TrySetResult(animator);
-
-            SetAnimatorTaskCompletionSource(image, null);
         }
 
         private static void SetAnimatorCore(Image image, Animator animator)
