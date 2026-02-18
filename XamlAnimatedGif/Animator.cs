@@ -14,6 +14,7 @@ using XamlAnimatedGif.Decompression;
 using XamlAnimatedGif.Extensions;
 using System.Diagnostics;
 using XamlAnimatedGif.Buffers;
+using System.Runtime.CompilerServices;
 
 namespace XamlAnimatedGif
 {
@@ -42,9 +43,9 @@ namespace XamlAnimatedGif
         {
             _sourceStream = sourceStream;
             _sourceUri = sourceUri;
-            _isSourceStreamOwner = sourceUri != null; // stream opened from URI, should close it
+            _isSourceStreamOwner = sourceUri is not null; // stream opened from URI, should close it
             _metadata = metadata;
-            _palettes = CreatePalettes(metadata);
+            _palettes = CreatePaletteNew(metadata);
             _bitmap = CreateBitmap(metadata);
             var desc = metadata.Header.LogicalScreenDescriptor;
             _stride = 4 * ((desc.Width * 32 + 31) / 32);
@@ -95,7 +96,7 @@ namespace XamlAnimatedGif
                         cancellationToken);
                 }
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 // Ignore
             }
@@ -298,9 +299,43 @@ namespace XamlAnimatedGif
             return bitmap;
         }
 
-        private static Dictionary<int, GifPalette> CreatePalettes(GifDataStream metadata)
+        private static Dictionary<int, GifPalette> CreatePaletteNew(GifDataStream metadata)
         {
+            const byte alpha = 0xFF;
+
             var palettes = new Dictionary<int, GifPalette>();
+            GifColor[]? globalColorTable = null;
+
+            if (metadata.Header.LogicalScreenDescriptor.HasGlobalColorTable)
+            {
+                globalColorTable = metadata.GlobalColorTable;
+            }
+
+            for (int i = 0; i < metadata.Frames.Count; i++)
+            {
+                var frame = metadata.Frames[i];
+                var colorTable = globalColorTable;
+                if (frame.Descriptor.HasLocalColorTable)
+                {
+                    colorTable =
+                        frame.LocalColorTable;
+                }
+
+                int? transparencyIndex = null;
+                var gce = frame.GraphicControl;
+                if (gce is { HasTransparency: true })
+                {
+                    transparencyIndex = gce.TransparencyIndex;
+                }
+
+                palettes[i] = new GifPalette(transparencyIndex, colorTable ?? []);
+            }
+
+            return palettes;
+        }
+        private static Dictionary<int, GifPaletteOld> CreatePalettes(GifDataStream metadata)
+        {
+            var palettes = new Dictionary<int, GifPaletteOld>();
             Color[]? globalColorTable = null;
             if (metadata.Header.LogicalScreenDescriptor.HasGlobalColorTable)
             {
@@ -329,7 +364,7 @@ namespace XamlAnimatedGif
                     transparencyIndex = gce.TransparencyIndex;
                 }
 
-                palettes[i] = new GifPalette(transparencyIndex, colorTable ?? []);
+                palettes[i] = new GifPaletteOld(transparencyIndex, colorTable ?? []);
             }
 
             return palettes;
@@ -390,10 +425,6 @@ namespace XamlAnimatedGif
                     var palette = _palettes[frameIndex];
                     int transparencyIndex = palette.TransparencyIndex ?? -1;
 
-                    //int[] rows = desc.Interlace
-                    //    ? InterlacedRows(rect.Height).ToArray()
-                    //    : NormalRows(rect.Height).ToArray();
-
                     if (!_cacheFrameDataInMemory)
                     {
                         indexBuffer = Rent.Array<byte>(indexBufferLength);
@@ -431,7 +462,7 @@ namespace XamlAnimatedGif
                                 int i = 4 * x;
                                 if (index != transparencyIndex)
                                 {
-                                    WriteColor(lineBuffer, palette[index], i);
+                                    WriteColor(lineBuffer, palette.Colors[index], i);
                                 }
                             }
                             CopyToBitmap(lineBuffer.AsSpan(0, bufferLength), _bitmap, offset);
@@ -452,65 +483,37 @@ namespace XamlAnimatedGif
 
             static void fillNormalRows(Span<int> rows)
             {
-                for (int y = 0; y < rows.Length; y++)
-                    rows[y] = y;
+                ref int f = ref MemoryMarshal.GetReference(rows);
+                for (int i = 0; i < rows.Length; i++)
+                {
+                    Unsafe.Add(ref f, i) = i;
+                }
             }
 
             static void fillInterlacedRows(Span<int> rows)
             {
                 int height = rows.Length;
                 int write = 0;
+                ref int f = ref MemoryMarshal.GetReference(rows);
 
                 // GIF interlace, 4 passes:
                 // Pass 1: 0, 8, 16, ...
-                for (int y = 0; y < height; y += 8)
-                    rows[write++] = y;
+                for (int i = 0; i < height; i += 8)
+                    Unsafe.Add(ref f, write++) = i;
 
                 // Pass 2: 4, 12, 20, ...
-                for (int y = 4; y < height; y += 8)
-                    rows[write++] = y;
+                for (int i = 4; i < height; i += 8)
+                    Unsafe.Add(ref f, write++) = i;
 
                 // Pass 3: 2, 6, 10, ...
-                for (int y = 2; y < height; y += 4)
-                    rows[write++] = y;
+                for (int i = 2; i < height; i += 4)
+                    Unsafe.Add(ref f, write++) = i;
 
                 // Pass 4: 1, 3, 5, ...
-                for (int y = 1; y < height; y += 2)
-                    rows[write++] = y;
+                for (int i = 1; i < height; i += 2)
+                    Unsafe.Add(ref f, write++) = i;
 
                 Debug.Assert(write == height);
-            }
-        }
-
-        private static IEnumerable<int> NormalRows(int height)
-        {
-            return Enumerable.Range(0, height);
-        }
-
-        private static IEnumerable<int> InterlacedRows(int height)
-        {
-            /*
-             * 4 passes:
-             * Pass 1: rows 0, 8, 16, 24...
-             * Pass 2: rows 4, 12, 20, 28...
-             * Pass 3: rows 2, 6, 10, 14...
-             * Pass 4: rows 1, 3, 5, 7...
-             * */
-            var passes = new[]
-            {
-                new { Start = 0, Step = 8 },
-                new { Start = 4, Step = 8 },
-                new { Start = 2, Step = 4 },
-                new { Start = 1, Step = 2 }
-            };
-            foreach (var pass in passes)
-            {
-                int y = pass.Start;
-                while (y < height)
-                {
-                    yield return y;
-                    y += pass.Step;
-                }
             }
         }
 
@@ -534,7 +537,14 @@ namespace XamlAnimatedGif
             new Span<byte>(srcPtr, destination.Length).CopyTo(destination);
         }
 
-        private static void WriteColor(Span<byte> lineBuffer, Color color, int startIndex)
+        private static void WriteColor(Span<byte> lineBuffer, GifColor color, int startIndex)
+        {
+            const byte alpha = 0xFF;
+            Color c = Color.FromArgb(alpha, color.R, color.G, color.B);
+            WriteColor(lineBuffer, ref c, startIndex);
+        }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static void WriteColor(Span<byte> lineBuffer, ref Color color, int startIndex)
         {
             lineBuffer[startIndex] = color.B;
             lineBuffer[startIndex + 1] = color.G;
@@ -751,11 +761,12 @@ namespace XamlAnimatedGif
             return "GIF: " + s;
         }
 
-        class GifPalette
+        private readonly record struct GifPalette(int? TransparencyIndex, GifColor[] Colors);
+        class GifPaletteOld
         {
             private readonly Color[] _colors;
 
-            public GifPalette(int? transparencyIndex, Color[] colors)
+            public GifPaletteOld(int? transparencyIndex, Color[] colors)
             {
                 TransparencyIndex = transparencyIndex;
                 _colors = colors;

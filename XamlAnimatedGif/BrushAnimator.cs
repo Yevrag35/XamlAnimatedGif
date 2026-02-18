@@ -8,7 +8,7 @@ using XamlAnimatedGif.Decoding;
 
 namespace XamlAnimatedGif
 {
-    public class BrushAnimator : Animator
+    public sealed class BrushAnimator : Animator
     {
         private BrushAnimator(Stream sourceStream, Uri sourceUri, GifDataStream metadata, RepeatBehavior repeatBehavior, bool cacheFrameDataInMemory) : base(sourceStream, sourceUri, metadata, repeatBehavior, cacheFrameDataInMemory)
         {

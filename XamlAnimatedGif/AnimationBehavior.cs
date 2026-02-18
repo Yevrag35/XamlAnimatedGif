@@ -493,7 +493,7 @@ namespace XamlAnimatedGif
                 // Check that the source hasn't changed while we were loading the animation
                 if (GetSeqNum(image) != seqNum)
                 {
-                    animator.Dispose();
+                    await animator.DisposeAsync();
                     return;
                 }
 
@@ -523,7 +523,7 @@ namespace XamlAnimatedGif
                 // Check that the source hasn't changed while we were loading the animation
                 if (GetSeqNum(image) != seqNum)
                 {
-                    animator.Dispose();
+                    await animator.DisposeAsync();
                     return;
                 }
 
