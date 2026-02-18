@@ -255,7 +255,7 @@ namespace XamlAnimatedGif
             else
                 tcs.TrySetResult(animator);
 
-            SetAnimatorTaskCompletionSource(image, null);
+            SetAnimatorTaskCompletionSource(image, tcs);
         }
 
         #endregion

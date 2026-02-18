@@ -94,22 +94,19 @@ namespace XamlAnimatedGif.Demo
         {
             IsDownloading = false;
 
-            Animator oldAnimator = Interlocked.Exchange(ref _animator, null);
-            if (oldAnimator is not null)
+            if (_animator != null)
             {
-                oldAnimator.CurrentFrameChanged -= CurrentFrameChanged;
-                await oldAnimator.DisposeAsync();
+                _animator.CurrentFrameChanged -= CurrentFrameChanged;
             }
 
-            var newAnimator = await AnimationBehavior.GetAnimatorTask(img);
+            _animator = await AnimationBehavior.GetAnimatorTask(img);
 
-            if (newAnimator is not null)
+            if (_animator != null)
             {
-                Interlocked.Exchange(ref _animator, newAnimator);
-                newAnimator.CurrentFrameChanged += CurrentFrameChanged;
+                _animator.CurrentFrameChanged += CurrentFrameChanged;
                 sldPosition.Value = 0;
-                sldPosition.Maximum = newAnimator.FrameCount - 1;
-                SetPlayPauseEnabled(newAnimator.IsPaused || newAnimator.IsComplete);
+                sldPosition.Maximum = _animator.FrameCount - 1;
+                SetPlayPauseEnabled(_animator.IsPaused || _animator.IsComplete);
             }
         }
 
