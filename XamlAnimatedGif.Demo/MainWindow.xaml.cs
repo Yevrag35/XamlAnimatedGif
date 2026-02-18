@@ -17,7 +17,6 @@ namespace XamlAnimatedGif.Demo
         {
             InitializeComponent();
 
-            this.Loaded += this.MainWindow_Loaded;
             //AnimationBehavior.SetDownloadCacheLocation(@"C:\GifCache"); //Path.GetTempPath()
 
             _images = new ObservableCollection<string>
@@ -41,15 +40,6 @@ namespace XamlAnimatedGif.Demo
                           "http://media.giphy.com/media/nWn6ko2ygIeEU/giphy.gif"
                       };
             DataContext = this;
-        }
-
-        private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
-        {
-            var animator = await AnimationBehavior.GetAnimatorTask(img);
-            if (animator is not null)
-            {
-                animator.Pause();
-            }
         }
 
 
