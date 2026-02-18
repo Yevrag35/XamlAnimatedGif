@@ -102,7 +102,6 @@ namespace XamlAnimatedGif.Demo
             }
 
             var newAnimator = await AnimationBehavior.GetAnimatorTask(img);
-            //_animator = AnimationBehavior.GetAnimator(img);
 
             if (newAnimator is not null)
             {

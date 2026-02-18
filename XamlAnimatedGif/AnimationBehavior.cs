@@ -10,6 +10,7 @@ using System.Windows.Markup;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Data;
+using System.Net.Http;
 
 
 namespace XamlAnimatedGif
@@ -552,7 +553,7 @@ namespace XamlAnimatedGif
             return uri;
         }
 
-        private static async void InitAnimationAsync(Image image, Uri sourceUri, RepeatBehavior repeatBehavior, int seqNum, bool cacheFrameDataInMemory)
+        private static async void InitAnimationAsync(Image image, Uri sourceUri, RepeatBehavior repeatBehavior, int seqNum, bool cacheFrameDataInMemory, HttpClient? client = null)
         {
             if (!CheckDesignMode(image, sourceUri, null))
             {
@@ -579,7 +580,7 @@ namespace XamlAnimatedGif
             }
             catch (InvalidSignatureException)
             {
-                await SetStaticImageAsync(image, sourceUri);
+                await SetStaticImageAsync(image, sourceUri, client);
                 ResolveAnimatorTask(image, null, false);
                 OnLoaded(image);
             }
@@ -664,12 +665,12 @@ namespace XamlAnimatedGif
             return DesignerProperties.GetIsInDesignMode(obj);
         }
 
-        private static async Task SetStaticImageAsync(Image image, Uri sourceUri)
+        private static async Task SetStaticImageAsync(Image image, Uri sourceUri, HttpClient? client)
         {
             try
             {
                 var progress = new Progress<int>(percentage => OnDownloadProgress(image, percentage));
-                using var stream = await UriLoader.GetStreamFromUriAsync(sourceUri, progress);
+                using var stream = await UriLoader.GetStreamFromUriAsync(sourceUri, progress, client);
                 SetStaticImageCore(image, stream);
             }
             catch (Exception ex)

@@ -132,7 +132,7 @@ namespace XamlAnimatedGif
             CancellationToken token = default)
             where TAnimator : Animator
         {
-            var stream = await UriLoader.GetStreamFromUriAsync(sourceUri, progress);
+            var stream = await UriLoader.GetStreamFromUriAsync(sourceUri, progress, client);
             try
             {
                 // ReSharper disable once AccessToDisposedClosure
