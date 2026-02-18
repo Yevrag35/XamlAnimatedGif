@@ -9,6 +9,7 @@ using System.Windows.Controls;
 using System.Windows.Markup;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
+using System.Windows.Data;
 
 
 namespace XamlAnimatedGif
@@ -199,7 +200,7 @@ namespace XamlAnimatedGif
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public static Task<Animator?> GetAnimatorTask(DependencyObject obj)
         {
-            return (Task<Animator?>)obj.GetValue(AnimatorTaskProperty);
+            return EnsureAnimatorTask(obj, replaceCompleted: false).Task;
         }
 
         private static void SetAnimatorTask(DependencyObject obj, Task<Animator?> value)
@@ -212,19 +213,32 @@ namespace XamlAnimatedGif
                 "AnimatorTask",
                 typeof(Task<Animator?>),
                 typeof(AnimationBehavior),
-                new PropertyMetadata(Task.FromResult<Animator?>(null)));
+                new PropertyMetadata(null));
+
+        private static TaskCompletionSource<Animator?> EnsureAnimatorTask(DependencyObject obj, bool replaceCompleted)
+        {
+            var tcs = GetAnimatorTaskCompletionSource(obj);
+            if (tcs == null || (replaceCompleted && tcs.Task.IsCompleted))
+            {
+                tcs = new TaskCompletionSource<Animator?>(TaskCreationOptions.RunContinuationsAsynchronously);
+                SetAnimatorTaskCompletionSource(obj, tcs);
+                SetAnimatorTask(obj, tcs.Task);
+            }
+
+            return tcs;
+        }
 
         private static TaskCompletionSource<Animator?>? GetAnimatorTaskCompletionSource(DependencyObject obj)
         {
-            return (TaskCompletionSource<Animator?>?)obj.GetValue(_animatorTaskCompletionSourceProperty);
+            return (TaskCompletionSource<Animator?>?)obj.GetValue(AnimatorTaskCompletionSourceProperty);
         }
 
         private static void SetAnimatorTaskCompletionSource(DependencyObject obj, TaskCompletionSource<Animator?>? value)
         {
-            obj.SetValue(_animatorTaskCompletionSourceProperty, value);
+            obj.SetValue(AnimatorTaskCompletionSourceProperty, value);
         }
 
-        private static readonly DependencyProperty _animatorTaskCompletionSourceProperty =
+        private static readonly DependencyProperty AnimatorTaskCompletionSourceProperty =
             DependencyProperty.RegisterAttached(
                 "AnimatorTaskCompletionSource",
                 typeof(TaskCompletionSource<Animator?>),
@@ -453,7 +467,8 @@ namespace XamlAnimatedGif
 
             image.Source = null;
             ClearAnimatorCore(image);
-            ResetAnimatorTask(image);
+            EnsureAnimatorTask(image, replaceCompleted: true);
+            //ResetAnimatorTask(image);
 
             try
             {
@@ -601,20 +616,9 @@ namespace XamlAnimatedGif
             }
         }
 
-        private static void ResetAnimatorTask(Image image)
-        {
-            ResolveAnimatorTask(image, null, false);
-
-            var tcs = new TaskCompletionSource<Animator?>(TaskCreationOptions.RunContinuationsAsynchronously);
-            SetAnimatorTaskCompletionSource(image, tcs);
-            SetAnimatorTask(image, tcs.Task);
-        }
-
         private static void ResolveAnimatorTask(Image image, Animator? animator, bool faulted, Exception? exception = null)
         {
-            var tcs = GetAnimatorTaskCompletionSource(image);
-            if (tcs == null)
-                return;
+            var tcs = EnsureAnimatorTask(image, replaceCompleted: false);
 
             if (faulted)
                 tcs.TrySetException(exception ?? new InvalidOperationException("Animator initialization failed."));

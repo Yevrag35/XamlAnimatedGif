@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media.Animation;
 using Microsoft.Win32;
 
@@ -16,6 +17,7 @@ namespace XamlAnimatedGif.Demo
         {
             InitializeComponent();
 
+            this.Loaded += this.MainWindow_Loaded;
             //AnimationBehavior.SetDownloadCacheLocation(@"C:\GifCache"); //Path.GetTempPath()
 
             _images = new ObservableCollection<string>
@@ -39,14 +41,14 @@ namespace XamlAnimatedGif.Demo
                           "http://media.giphy.com/media/nWn6ko2ygIeEU/giphy.gif"
                       };
             DataContext = this;
-
-            this.Loaded += this.MainWindow_Loaded;
         }
 
         private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
-            
+            var animator = await AnimationBehavior.GetAnimatorTask(img);
+            Console.WriteLine(animator is not null);
         }
+
 
 #pragma warning disable IDE1006 // Naming Styles
         private void btnOpenFile_Click(object sender, RoutedEventArgs e)
