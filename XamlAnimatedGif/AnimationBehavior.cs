@@ -1,4 +1,4 @@
-﻿using XamlAnimatedGif.Decoding;
+using XamlAnimatedGif.Decoding;
 using System;
 using System.IO;
 using System.Threading.Tasks;
@@ -180,7 +180,7 @@ namespace XamlAnimatedGif
             return (Animator?)obj.GetValue(AnimatorProperty);
         }
 
-        private static void SetAnimator(DependencyObject obj, Animator value)
+        private static void SetAnimator(DependencyObject obj, Animator? value)
         {
             obj.SetValue(AnimatorProperty, value);
         }
@@ -257,7 +257,7 @@ namespace XamlAnimatedGif
             image.RaiseEvent(new AnimationErrorEventArgs(image, exception, kind));
         }
 
-        private static void AnimatorError(object sender, AnimationErrorEventArgs e)
+        private static void AnimatorError(object? sender, AnimationErrorEventArgs e)
         {
             var source = e.Source as UIElement;
             source?.RaiseEvent(e);
@@ -335,7 +335,7 @@ namespace XamlAnimatedGif
             (d as UIElement)?.RemoveHandler(AnimationStartedEvent, handler);
         }
 
-        private static void AnimatorAnimationStarted(object sender, AnimationStartedEventArgs e)
+        private static void AnimatorAnimationStarted(object? sender, AnimationStartedEventArgs e)
         {
             (e.Source as Image)?.RaiseEvent(e);
         }
@@ -361,7 +361,7 @@ namespace XamlAnimatedGif
             (d as UIElement)?.RemoveHandler(AnimationCompletedEvent, handler);
         }
 
-        private static void AnimatorAnimationCompleted(object sender, AnimationCompletedEventArgs e)
+        private static void AnimatorAnimationCompleted(object? sender, AnimationCompletedEventArgs e)
         {
             (e.Source as Image)?.RaiseEvent(e);
         }
@@ -408,7 +408,7 @@ namespace XamlAnimatedGif
             InitAnimation(image);
         }
 
-        private static bool CheckDesignMode(Image image, Uri sourceUri, Stream sourceStream)
+        private static bool CheckDesignMode(Image image, Uri? sourceUri, Stream? sourceStream)
         {
             if (IsInDesignMode(image) && !GetAnimateInDesignMode(image))
             {
@@ -503,7 +503,7 @@ namespace XamlAnimatedGif
             return element.IsLoaded;
         }
 
-        private static Uri GetAbsoluteUri(Image image)
+        private static Uri? GetAbsoluteUri(Image image)
         {
             var uri = GetSourceUri(image);
             if (uri == null)

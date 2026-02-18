@@ -1,6 +1,9 @@
+using System.Runtime.InteropServices;
+
 namespace XamlAnimatedGif.Decoding
 {
-    internal struct GifColor
+    [StructLayout(LayoutKind.Auto)]
+    internal readonly struct GifColor
     {
         internal GifColor(byte r, byte g, byte b)
         {

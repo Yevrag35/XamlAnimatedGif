@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Buffers;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
@@ -10,6 +9,14 @@ using System.Threading.Tasks;
 
 namespace XamlAnimatedGif.IO;
 
+/// <summary>
+/// Provides a memory stream that rents a buffer from an array pool, allowing for efficient memory management and reuse.
+/// </summary>
+/// <remarks>This class is designed to minimize memory allocations by utilizing an array pool. It supports reading
+/// and writing operations, and the buffer can be cleared before returning to the pool based on the ClearOnReturn
+/// property. The stream's length and position can be managed, and it provides methods to convert the stream contents to
+/// an array or an ArraySegment.</remarks>
+[DebuggerDisplay(@"\{Length = {Length}, Position = {Position}, Capacity = {Capacity}\}")]
 public sealed class ArrayPoolMemoryStream : Stream
 {
     private const int DEFAULT_INITIAL_CAPACITY = 8192;
@@ -20,10 +27,11 @@ public sealed class ArrayPoolMemoryStream : Stream
     private long _position;
 
     /// <summary>
-    /// Initializes a new instance.
+    /// Initializes a new instance of the <see cref="ArrayPoolMemoryStream"/> class with the specified initial capacity and array pool.
     /// </summary>
     /// <param name="initialCapacity">Initial capacity in bytes; rounded up to at least 1.</param>
     /// <param name="pool">Pool to rent from; defaults to <see cref="ArrayPool{T}.Shared"/>.</param>
+    [DebuggerStepThrough]
     public ArrayPoolMemoryStream(int initialCapacity = DEFAULT_INITIAL_CAPACITY, ArrayPool<byte>? pool = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(initialCapacity);
@@ -107,15 +115,18 @@ public sealed class ArrayPoolMemoryStream : Stream
         return true;
     }
 
+    [DebuggerStepThrough]
     internal ReadOnlySpan<byte> AsSpan(int start, int length)
     {
         this.EnsureNotDisposed();
         return new ReadOnlySpan<byte>(_buffer, start, length);
     }
+    [DebuggerStepThrough]
     internal ReadOnlyMemory<byte> AsMemory()
     {
         return this.AsMemory(0, checked((int)_length));
     }
+    [DebuggerStepThrough]
     internal ReadOnlyMemory<byte> AsMemory(int start, int length)
     {
         this.EnsureNotDisposed();
@@ -123,6 +134,7 @@ public sealed class ArrayPoolMemoryStream : Stream
     }
 
     /// <inheritdoc/>
+    [DebuggerStepThrough]
     public override void Flush() { /* no-op */ }
 
     public bool IsSequenceEqual(ReadOnlySpan<byte> other)
@@ -185,9 +197,10 @@ public sealed class ArrayPoolMemoryStream : Stream
         if (_length == 0 || _buffer is null)
             return string.Empty;
 
-        return encoding.GetString(_buffer.AsSpan(0, (int)_length));
+        return encoding.GetString(_buffer.AsSpan(0, checked((int)_length)));
     }
 
+    [DebuggerStepThrough]
     internal void Rewind()
     {
         this.EnsureNotDisposed();
@@ -377,12 +390,13 @@ public sealed class ArrayPoolMemoryStream : Stream
         _buffer = null;
     }
 
-    [MemberNotNull(nameof(_buffer))]
+    [MemberNotNull(nameof(_buffer)), StackTraceHidden, DebuggerStepThrough]
     private void EnsureNotDisposed()
     {
         ObjectDisposedException.ThrowIf(_buffer is null, this);
     }
 
+    [DebuggerStepThrough]
     private static void ValidateReadArgs(byte[] buffer, int offset, int count)
     {
         if (buffer is null)
@@ -394,7 +408,7 @@ public sealed class ArrayPoolMemoryStream : Stream
         if ((uint)count > buffer.Length - offset)
             throw new ArgumentOutOfRangeException(nameof(count));
     }
-
+    [DebuggerStepThrough]
     private static void ValidateWriteArgs(byte[] buffer, int offset, int count)
     {
         if (buffer is null)

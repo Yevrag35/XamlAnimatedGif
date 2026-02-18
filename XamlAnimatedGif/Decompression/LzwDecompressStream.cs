@@ -12,7 +12,7 @@ namespace XamlAnimatedGif.Decompression
         private readonly BitReader _reader;
         private readonly CodeTable _codeTable;
         private int _prevCode = -1;
-        private byte[] _remainingBytes;
+        private byte[]? _remainingBytes;
         private bool _endOfStream;
 
         public LzwDecompressStream(byte[] compressedBuffer, int minimumCodeLength)
@@ -86,12 +86,12 @@ namespace XamlAnimatedGif.Decompression
             _prevCode = -1;
         }
 
-        private static byte[] CopySequenceToBuffer(byte[] sequence, byte[] buffer, int offset, int count, ref int read)
+        private static byte[]? CopySequenceToBuffer(byte[] sequence, byte[] buffer, int offset, int count, ref int read)
         {
             int bytesToRead = Math.Min(sequence.Length, count - read);
             Buffer.BlockCopy(sequence, 0, buffer, offset + read, bytesToRead);
             read += bytesToRead;
-            byte[] remainingBytes = null;
+            byte[]? remainingBytes = null;
             if (bytesToRead < sequence.Length)
             {
                 int remainingBytesCount = sequence.Length - bytesToRead;
@@ -153,7 +153,7 @@ namespace XamlAnimatedGif.Decompression
             return true;
         }
 
-        struct Sequence
+        readonly struct Sequence
         {
             public Sequence(byte[] bytes)
                 : this()
@@ -166,6 +166,7 @@ namespace XamlAnimatedGif.Decompression
             {
                 IsClearCode = isClearCode;
                 IsStopCode = isStopCode;
+                Bytes = [];
             }
 
             public byte[] Bytes { get; }

@@ -24,18 +24,6 @@ namespace XamlAnimatedGif.Extensions
             }
         }
 
-        public static void ReadAll(this Stream stream, byte[] buffer, int offset, int count)
-        {
-            int totalRead = 0;
-            while (totalRead < count)
-            {
-                int n = stream.Read(buffer, offset + totalRead, count - totalRead);
-                if (n == 0)
-                    throw new EndOfStreamException();
-                totalRead += n;
-            }
-        }
-
         public static async Task<int> ReadByteAsync(this Stream stream, CancellationToken cancellationToken = default)
         {
             //byte[] buffer = new byte[1];
@@ -60,7 +48,7 @@ namespace XamlAnimatedGif.Extensions
             return new BufferedStream(stream);
         }
 
-        public static async Task CopyToAsync(this Stream source, Stream destination, IProgress<long> progress, int bufferSize = 81920, CancellationToken cancellationToken = default)
+        public static async Task CopyToAsync(this Stream source, Stream destination, IProgress<long>? progress, int bufferSize = 81920, CancellationToken cancellationToken = default)
         {
             byte[] buffer = new byte[bufferSize];
             int bytesRead;

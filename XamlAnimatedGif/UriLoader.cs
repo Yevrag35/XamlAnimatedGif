@@ -19,6 +19,7 @@ namespace XamlAnimatedGif
         {
             if (uri.IsAbsoluteUri && (uri.Scheme == "http" || uri.Scheme == "https"))
                 return GetNetworkStreamAsync(uri, progress);
+
             return GetStreamFromUriCoreAsync(uri);
         }
 
@@ -32,7 +33,7 @@ namespace XamlAnimatedGif
                 cacheStream = await OpenTempFileStreamAsync(cacheFileName);
             }
             progress.Report(100);
-            return cacheStream;
+            return cacheStream ?? Stream.Null;
         }
         private static async Task DownloadToCacheFileAsync(Uri uri, string fileName, IProgress<int> progress)
         {
@@ -45,7 +46,7 @@ namespace XamlAnimatedGif
                 long length = response.Content.Headers.ContentLength ?? 0;
                 using var responseStream = await response.Content.ReadAsStreamAsync();
                 using var fileStream = await CreateTempFileStreamAsync(fileName);
-                IProgress<long> absoluteProgress = null;
+                IProgress<long>? absoluteProgress = null;
                 if (progress != null)
                 {
                     absoluteProgress =
@@ -88,12 +89,12 @@ namespace XamlAnimatedGif
             throw new NotSupportedException("Only pack:, file:, http: and https: URIs are supported");
         }
 
-        private static Task<Stream> OpenTempFileStreamAsync(string fileName)
+        private static Task<Stream?> OpenTempFileStreamAsync(string fileName)
         {
             if (!Directory.Exists(DownloadCacheLocation))
                 Directory.CreateDirectory(DownloadCacheLocation);
             string path = Path.Combine(DownloadCacheLocation, fileName);
-            Stream stream = null;
+            Stream? stream = null;
             try
             {
                 stream = File.OpenRead(path);
@@ -101,6 +102,7 @@ namespace XamlAnimatedGif
             catch (FileNotFoundException)
             {
             }
+
             return Task.FromResult(stream);
         }
 
