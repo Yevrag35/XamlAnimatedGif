@@ -38,6 +38,7 @@ namespace XamlAnimatedGif
                 sourceUri,
                 progress,
                 (stream, metadata) => new ImageAnimator(stream, sourceUri, metadata, repeatBehavior, image, cacheFrameDataInMemory),
+                null,
                 cancellationToken);
         }
 

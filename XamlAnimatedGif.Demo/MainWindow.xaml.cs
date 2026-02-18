@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Windows;
 using System.Windows.Media.Animation;
 using Microsoft.Win32;
@@ -38,6 +39,13 @@ namespace XamlAnimatedGif.Demo
                           "http://media.giphy.com/media/nWn6ko2ygIeEU/giphy.gif"
                       };
             DataContext = this;
+
+            this.Loaded += this.MainWindow_Loaded;
+        }
+
+        private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
+        {
+            
         }
 
 #pragma warning disable IDE1006 // Naming Styles
@@ -87,45 +95,50 @@ namespace XamlAnimatedGif.Demo
         }
 
 
-        private void AnimationBehavior_OnLoaded(object sender, RoutedEventArgs e)
+        private async void AnimationBehavior_OnLoaded(object sender, RoutedEventArgs e)
         {
             IsDownloading = false;
 
-            if (_animator != null)
+            Animator oldAnimator = Interlocked.Exchange(ref _animator, null);
+            if (oldAnimator is not null)
             {
-                _animator.CurrentFrameChanged -= CurrentFrameChanged;
+                oldAnimator.CurrentFrameChanged -= CurrentFrameChanged;
+                await oldAnimator.DisposeAsync();
             }
 
-            _animator = AnimationBehavior.GetAnimator(img);
+            var newAnimator = await AnimationBehavior.GetAnimatorTask(img);
+            //_animator = AnimationBehavior.GetAnimator(img);
 
-            if (_animator != null)
+            if (newAnimator is not null)
             {
-                _animator.CurrentFrameChanged += CurrentFrameChanged;
+                Interlocked.Exchange(ref _animator, newAnimator);
+                newAnimator.CurrentFrameChanged += CurrentFrameChanged;
                 sldPosition.Value = 0;
-                sldPosition.Maximum = _animator.FrameCount - 1;
-                SetPlayPauseEnabled(_animator.IsPaused || _animator.IsComplete);
+                sldPosition.Maximum = newAnimator.FrameCount - 1;
+                SetPlayPauseEnabled(newAnimator.IsPaused || newAnimator.IsComplete);
             }
         }
 
         private Stopwatch _stopwatch;
         private void CurrentFrameChanged(object sender, EventArgs e)
         {
-            if (_animator != null)
+            Animator animator = Volatile.Read(in _animator);
+            if (animator is not null)
             {
-                if (_animator.CurrentFrameIndex == 0)
+                if (animator.CurrentFrameIndex == 0)
                 {
                     StopStopwatch();
-                    if (!_animator.IsPaused && !_animator.IsComplete)
+                    if (!animator.IsPaused && !animator.IsComplete)
                         StartStopwatch();
                 }
 
-                sldPosition.Value = _animator.CurrentFrameIndex;
+                sldPosition.Value = animator.CurrentFrameIndex;
             }
         }
 
         private void StartStopwatch()
         {
-            _stopwatch ??= new Stopwatch();;
+            _stopwatch ??= new Stopwatch();
             _stopwatch.Restart();
         }
 
@@ -135,8 +148,12 @@ namespace XamlAnimatedGif.Demo
 
         private void StopStopwatch()
         {
-            _stopwatch?.Stop();
-            LastRunTime = _stopwatch?.Elapsed;
+            var stopwatch = Volatile.Read(in _stopwatch);
+            if (stopwatch is not null)
+            {
+                stopwatch.Stop();
+                LastRunTime = stopwatch.Elapsed;
+            }
         }
 
         private void ClearStopwatch()
@@ -154,8 +171,9 @@ namespace XamlAnimatedGif.Demo
         {
             StopStopwatch();
             Completed = true;
-            if (_animator != null)
-                SetPlayPauseEnabled(_animator.IsPaused || _animator.IsComplete);
+            var animator = Volatile.Read(in _animator);
+            if (animator != null)
+                SetPlayPauseEnabled(animator.IsPaused || animator.IsComplete);
         }
 
         private bool _useDefaultRepeatBehavior = true;
@@ -164,7 +182,7 @@ namespace XamlAnimatedGif.Demo
             get => _useDefaultRepeatBehavior;
             set
             {
-                _useDefaultRepeatBehavior = value;
+                Interlocked.Exchange(ref _useDefaultRepeatBehavior, value);
                 OnPropertyChanged();
                 if (value)
                     RepeatBehavior = default;
@@ -178,7 +196,7 @@ namespace XamlAnimatedGif.Demo
             get => _repeatForever;
             set
             {
-                _repeatForever = value;
+                Interlocked.Exchange(ref _repeatForever, value);
                 OnPropertyChanged();
                 if (value)
                     RepeatBehavior = RepeatBehavior.Forever;
@@ -192,7 +210,7 @@ namespace XamlAnimatedGif.Demo
             get => _useSpecificRepeatCount;
             set
             {
-                _useSpecificRepeatCount = value;
+                Interlocked.Exchange(ref _useSpecificRepeatCount, value);
                 OnPropertyChanged();
                 if (value)
                     RepeatBehavior = new RepeatBehavior(RepeatCount);
@@ -205,7 +223,7 @@ namespace XamlAnimatedGif.Demo
             get => _repeatCount;
             set
             {
-                _repeatCount = value;
+                Interlocked.Exchange(ref _repeatCount, value);
                 OnPropertyChanged();
                 if (UseSpecificRepeatCount)
                     RepeatBehavior = new RepeatBehavior(value);
@@ -218,7 +236,7 @@ namespace XamlAnimatedGif.Demo
             get => _completed;
             set
             {
-                _completed = value;
+                Interlocked.Exchange(ref _completed, value);
                 OnPropertyChanged();
             }
         }
@@ -229,7 +247,7 @@ namespace XamlAnimatedGif.Demo
             get => _repeatBehavior;
             set
             {
-                _repeatBehavior = value;
+                Interlocked.Exchange(ref _repeatBehavior, value);
                 OnPropertyChanged();
                 Completed = false;
             }
@@ -241,7 +259,7 @@ namespace XamlAnimatedGif.Demo
             get => _autoStart;
             set
             {
-                _autoStart = value;
+                Interlocked.Exchange(ref _autoStart, value);
                 OnPropertyChanged();
             }
         }
@@ -253,7 +271,7 @@ namespace XamlAnimatedGif.Demo
             get => _cacheFramesInMemory;
             set
             {
-                _cacheFramesInMemory = value;
+                Interlocked.Exchange(ref _cacheFramesInMemory, value);
                 OnPropertyChanged();
             }
         }
@@ -264,7 +282,7 @@ namespace XamlAnimatedGif.Demo
             get => _isDownloading;
             set
             {
-                _isDownloading = value;
+                Interlocked.Exchange(ref _isDownloading, value);
                 OnPropertyChanged();
             }
         }
@@ -275,7 +293,7 @@ namespace XamlAnimatedGif.Demo
             get => _downloadProgress;
             set
             {
-                _downloadProgress = value;
+                Interlocked.Exchange(ref _downloadProgress, value);
                 OnPropertyChanged();
             }
         }
@@ -286,7 +304,7 @@ namespace XamlAnimatedGif.Demo
             get => _isDownloadProgressIndeterminate;
             set
             {
-                _isDownloadProgressIndeterminate = value;
+                Interlocked.Exchange(ref _isDownloadProgressIndeterminate, value);
                 OnPropertyChanged();
             }
         }
@@ -365,10 +383,11 @@ namespace XamlAnimatedGif.Demo
 
         private void btnRewind_Click(object sender, RoutedEventArgs e)
         {
-            if (_animator == null)
+            var animator = Volatile.Read(in _animator);
+            if (animator == null)
                 return;
-            _animator.Rewind();
-            SetPlayPauseEnabled(_animator.IsPaused || _animator.IsComplete);
+            animator.Rewind();
+            SetPlayPauseEnabled(animator.IsPaused || animator.IsComplete);
             Completed = false;
         }
 

@@ -44,6 +44,7 @@ namespace XamlAnimatedGif
                 sourceUri,
                 progress,
                 (stream, metadata) => new BrushAnimator(stream, sourceUri, metadata, repeatBehavior, cacheFrameDataInMemory),
+                null,
                 cancellationToken);
         }
 

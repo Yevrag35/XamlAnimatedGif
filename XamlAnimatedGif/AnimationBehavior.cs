@@ -453,6 +453,7 @@ namespace XamlAnimatedGif
 
             image.Source = null;
             ClearAnimatorCore(image);
+            ResetAnimatorTask(image);
 
             try
             {
@@ -469,6 +470,8 @@ namespace XamlAnimatedGif
                     InitAnimationAsync(image, uri, GetRepeatBehavior(image), seqNum, GetCacheFramesInMemory(image));
                     return;
                 }
+
+                ResolveAnimatorTask(image, null, false);
             }
             catch (Exception ex)
             {
