@@ -150,7 +150,7 @@ namespace XamlAnimatedGif
             return create(metadata);
         }
 
-#endregion
+        #endregion
 
         #region Animation
 
