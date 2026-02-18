@@ -35,6 +35,9 @@ namespace XamlAnimatedGif
         private readonly byte[][] _cachedFrameBytes = [];
         private readonly Task? _loadFramesDataTask;
         private readonly CancellationTokenSource? _loadFramesCancellationSource;
+
+        internal Task Initialization { get; }
+
         #region Constructor and factory methods
 
         internal Animator(Stream sourceStream, Uri sourceUri, GifDataStream metadata, RepeatBehavior repeatBehavior,
@@ -60,7 +63,17 @@ namespace XamlAnimatedGif
                 _cachedFrameBytes = new byte[_metadata.Frames.Count][];
                 var cancellationToken = _loadFramesCancellationSource.Token;
                 _loadFramesDataTask = Task.Run(() => LoadFrames(cancellationToken), cancellationToken);
+                Initialization = _loadFramesDataTask;
             }
+            else
+            {
+                Initialization = Task.CompletedTask;
+            }
+        }
+
+        public Task WaitForInitializationAsync(CancellationToken cancellationToken = default)
+        {
+            return Initialization.WaitAsync(cancellationToken);
         }
 
         private async Task LoadFrames(CancellationToken cancellationToken)
@@ -389,10 +402,6 @@ namespace XamlAnimatedGif
 
                     var palette = _palettes[frameIndex];
                     int transparencyIndex = palette.TransparencyIndex ?? -1;
-
-                    //int[] rows = desc.Interlace
-                    //    ? InterlacedRows(rect.Height).ToArray()
-                    //    : NormalRows(rect.Height).ToArray();
 
                     if (!_cacheFrameDataInMemory)
                     {
