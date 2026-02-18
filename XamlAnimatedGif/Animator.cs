@@ -15,6 +15,7 @@ using XamlAnimatedGif.Extensions;
 using System.Diagnostics;
 using XamlAnimatedGif.Buffers;
 using System.Runtime.CompilerServices;
+using System.Net.Http;
 
 namespace XamlAnimatedGif
 {
@@ -114,7 +115,8 @@ namespace XamlAnimatedGif
             Uri sourceUri,
             IProgress<int> progress,
             Func<Stream, GifDataStream, TAnimator> create,
-            CancellationToken token)
+            HttpClient? client = null,
+            CancellationToken token = default)
             where TAnimator : Animator
         {
             var stream = await UriLoader.GetStreamFromUriAsync(sourceUri, progress);
@@ -301,8 +303,6 @@ namespace XamlAnimatedGif
 
         private static Dictionary<int, GifPalette> CreatePaletteNew(GifDataStream metadata)
         {
-            const byte alpha = 0xFF;
-
             var palettes = new Dictionary<int, GifPalette>();
             GifColor[]? globalColorTable = null;
 
@@ -665,8 +665,11 @@ namespace XamlAnimatedGif
             return new RepeatBehavior(metadata.RepeatCount);
         }
 
-        private Int32Rect GetFixedUpFrameRect(GifImageDescriptor desc)
+        private Int32Rect GetFixedUpFrameRect(GifImageDescriptor? desc)
         {
+            if (desc is null)
+                return default;
+
             int width = Math.Min(desc.Width, _bitmap.PixelWidth - desc.Left);
             int height = Math.Min(desc.Height, _bitmap.PixelHeight - desc.Top);
             return new Int32Rect(desc.Left, desc.Top, width, height);

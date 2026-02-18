@@ -48,7 +48,7 @@ namespace XamlAnimatedGif.Extensions
             return new BufferedStream(stream);
         }
 
-        public static async Task CopyToAsync(this Stream source, Stream destination, IProgress<long> progress, int bufferSize = 81920, CancellationToken cancellationToken = default)
+        public static async Task CopyToAsync(this Stream source, Stream destination, IProgress<long>? progress, int bufferSize = 81920, CancellationToken cancellationToken = default)
         {
             byte[] buffer = new byte[bufferSize];
             int bytesRead;

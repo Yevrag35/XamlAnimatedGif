@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -10,11 +11,11 @@ namespace XamlAnimatedGif.Decoding
     {
         internal const int ImageSeparator = 0x2C;
 
-        public GifImageDescriptor Descriptor { get; private set; }
-        public GifColor[] LocalColorTable { get; private set; }
-        public IList<GifExtension> Extensions { get; private set; }
-        public GifImageData ImageData { get; private set; }
-        public GifGraphicControlExtension GraphicControl { get; set; }
+        public GifImageDescriptor? Descriptor { get; private set; }
+        public GifColor[] LocalColorTable { get; private set; } = [];
+        public IList<GifExtension> Extensions { get; private set; } = Array.Empty<GifExtension>();
+        public GifImageData? ImageData { get; private set; }
+        public GifGraphicControlExtension? GraphicControl { get; set; }
 
         private GifFrame()
         {
