@@ -223,7 +223,7 @@ namespace XamlAnimatedGif
 #if NETCOREAPP
                     TaskCreationOptions.RunContinuationsAsynchronously;
 #else
-                    TaskCreationOptions.LongRunning;
+                    TaskCreationOptions.None;
 #endif
                 tcs = new TaskCompletionSource<Animator>(options);
                 SetAnimatorTaskCompletionSource(obj, tcs);
